@@ -1,5 +1,57 @@
 To implement your **CUDA-based Black-Scholes model with real-time financial data**, here’s a clear **step-by-step guide** covering data access, integration, and real-time execution:
 
+
+Our AAD implementation on CPU is working! 🎉
+---
+
+## ✅ CPU Benchmark Output
+
+```
+Total simulated price sum: 1.04506e+06
+Total time: 1.12539 seconds
+Avg time per evaluation: 11.2539 µs
+```
+
+---
+
+## 📊 Interpretation
+
+| Metric                    | Meaning                                                                |
+| ------------------------- | ---------------------------------------------------------------------- |
+| `1.04506e+06`             | Total sum of 100,000 option prices (`≈ 10.45` each) — expected result. |
+| `1.12539 seconds`         | Total runtime for 100,000 evaluations with AAD.                        |
+| `11.25 µs per evaluation` | Time for 1 full forward+reverse AAD evaluation — quite fast for CPU.   |
+
+---
+
+## 🧠 Context
+
+* **This is your CPU baseline**.
+* we will compare this with your **GPU version later**.
+* The GPU should achieve **5x–50x speedup**, depending on kernel design and parallelism.
+
+---
+
+## ⏭️ What Next?
+
+Here are three logical next steps:
+
+### 1. ✅ Profile the CPU Version
+
+* See where time is spent: forward pass vs tape vs reverse pass.
+* we can use tools like `perf` (Linux) or `Instruments` (macOS), or `gprof`.
+
+### 2. 🚀 Start the GPU Version
+
+* Convert our AADNode/Number logic to `__device__` structs.
+* Use thread-local tape buffers.
+* Process thousands of inputs in parallel on the GPU.
+
+### 3. 🧪 Add Finite Difference Validation
+
+* Use bumping to compute Greeks and compare with AAD.
+* Helps verify correctness.
+
 ---
 
 ## ✅ 1. **Real-Time Data Access**
