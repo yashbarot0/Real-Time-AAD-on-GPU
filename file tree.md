@@ -1,4 +1,3 @@
-# Real-Time-AAD-on-GPU
 aad-gpu-black-scholes/
 │
 ├── CMakeLists.txt                  # Root CMake configuration
