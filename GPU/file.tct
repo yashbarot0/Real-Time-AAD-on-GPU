@@ -1,0 +1,9 @@
+gpu_aad/
+├── CMakeLists.txt
+├── main.cpp
+├── AADTypes.h
+├── GPUAADTape.h
+├── GPUAADTape.cpp
+├── GPUAADNumber.h
+├── GPUAADNumber.cpp
+└── cuda_kernels.cu
