@@ -1,3 +1,4 @@
 {
-    "cmake.sourceDirectory": "/Users/yash/Code/AAD/CODE"
+    "cmake.sourceDirectory": "/Users/yash/Code/AAD/CODE",
+    "kiroAgent.configureMCP": "Disabled"
 }

@@ -1,0 +1,28 @@
+# Real-time financial data dependencies
+yfinance>=0.2.18
+requests>=2.31.0
+numpy>=1.24.0
+pandas>=2.0.0
+matplotlib>=3.7.0
+plotly>=5.15.0
+
+# Optional: Professional data sources
+# alpha-vantage>=2.3.1
+# quandl>=3.7.0
+# polygon-api-client>=1.12.0
+
+# For web scraping (if needed)
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+
+# For async operations
+aiohttp>=3.8.0
+asyncio-throttle>=1.0.2
+
+# For data storage
+h5py>=3.9.0
+sqlite3  # Built into Python
+
+# Development tools
+pytest>=7.4.0
+black>=23.0.0

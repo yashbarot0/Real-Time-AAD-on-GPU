@@ -46,6 +46,24 @@ friend AADNumber operator+(double lhs, const AADNumber& rhs) {
     return res;
 }
 
+AADNumber operator+(double rhs) const {
+    AADNumber res(node->val + rhs);
+    res.node->dependencies = {{node.get(), 1.0}};
+    return res;
+}
+
+AADNumber operator*(double rhs) const {
+    AADNumber res(node->val * rhs);
+    res.node->dependencies = {{node.get(), rhs}};
+    return res;
+}
+
+AADNumber operator/(double rhs) const {
+    AADNumber res(node->val / rhs);
+    res.node->dependencies = {{node.get(), 1.0 / rhs}};
+    return res;
+}
+
 
     AADNumber operator-(const AADNumber& other) const {
         AADNumber res(node->val - other.node->val);
@@ -95,6 +113,16 @@ friend AADNumber operator+(double lhs, const AADNumber& rhs) {
     }
 
     friend AADNumber norm_cdf(const AADNumber& x) {
-        return 0.5 * (AADNumber(1.0) + erf(x / sqrt(AADNumber(2.0))));
+        // Direct implementation: Φ(x) = 0.5 * (1 + erf(x/√2))
+        double sqrt2 = std::sqrt(2.0);
+        double x_scaled = x.node->val / sqrt2;
+        double cdf_val = 0.5 * (1.0 + std::erf(x_scaled));
+        
+        // Derivative: φ(x) = (1/√(2π)) * exp(-x²/2)
+        double pdf_val = (1.0 / std::sqrt(2.0 * M_PI)) * std::exp(-0.5 * x.node->val * x.node->val);
+        
+        AADNumber res(cdf_val);
+        res.node->dependencies = {{x.node.get(), pdf_val}};
+        return res;
     }
 };
