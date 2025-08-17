@@ -3,58 +3,11 @@
 // Implements step-by-step Black-Scholes construction using proven CPU method
 
 #include "AADTypes.h"
+#include "device_functions.cuh"
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include <cmath>
 #include <cstdio>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
-// Forward declaration of device_black_scholes_call from cuda_kernels.cu
-__device__ void device_black_scholes_call(
-    double S, double K, double T, double r, double sigma,
-    double* price, double* delta, double* vega, double* gamma, double* theta, double* rho);
-
-// Safe mathematical operations for numerical stability
-__device__ inline double safe_log(double x) {
-    const double min_val = 1e-15;
-    return (x > min_val) ? log(x) : log(min_val);
-}
-
-__device__ inline double safe_exp(double x) {
-    const double max_val = 700.0;  // Prevent overflow
-    const double min_val = -700.0; // Prevent underflow
-    x = fmax(fmin(x, max_val), min_val);
-    return exp(x);
-}
-
-__device__ inline double safe_sqrt(double x) {
-    return sqrt(fmax(x, 0.0));
-}
-
-__device__ inline double safe_divide(double numerator, double denominator) {
-    const double min_denom = 1e-15;
-    return (fabs(denominator) > min_denom) ? numerator / denominator : 0.0;
-}
-
-// Enhanced normal CDF with numerical stability
-__device__ double device_norm_cdf(double x) {
-    // Handle extreme values
-    if (x < -8.0) return 0.0;
-    if (x > 8.0) return 1.0;
-    
-    // Use the relationship: Φ(x) = 0.5 * (1 + erf(x/√2))
-    const double sqrt2 = 1.4142135623730951; // √2
-    return 0.5 * (1.0 + erf(x / sqrt2));
-}
-
-// Normal PDF for derivative calculations
-__device__ double device_norm_pdf(double x) {
-    const double inv_sqrt_2pi = 0.3989422804014327; // 1/√(2π)
-    return inv_sqrt_2pi * safe_exp(-0.5 * x * x);
-}
 
 // Thread-local AAD tape recording functions
 __device__ int record_constant(double value, double* values, int* next_var_idx) {

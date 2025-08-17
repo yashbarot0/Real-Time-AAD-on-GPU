@@ -21,7 +21,7 @@ set(SOURCES
 
 set(CUDA_SOURCES
     cuda_kernels.cu
-    blackscholes_aad_kernels.cu
+    blackscholes_aad_kernels_fixed.cu
     numerical_stability.cu
 )
 
