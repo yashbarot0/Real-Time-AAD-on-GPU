@@ -180,44 +180,44 @@ __global__ void batch_aad_reverse_kernel(
         if (result_adjoint == 0.0) continue; // Skip if no gradient flows through
         
         // Propagate gradients based on operation type
-        switch (entry.op_type) {
-            case AADOpType::ADD:
+        switch (static_cast<int>(entry.op_type)) {
+            case static_cast<int>(AADOpType::ADD):
                 adjoints[entry.input1_idx] += result_adjoint * entry.partial1;
                 adjoints[entry.input2_idx] += result_adjoint * entry.partial2;
                 break;
                 
-            case AADOpType::SUB:
+            case static_cast<int>(AADOpType::SUB):
                 adjoints[entry.input1_idx] += result_adjoint * entry.partial1;
                 adjoints[entry.input2_idx] += result_adjoint * entry.partial2;
                 break;
                 
-            case AADOpType::MUL:
+            case static_cast<int>(AADOpType::MUL):
                 adjoints[entry.input1_idx] += result_adjoint * entry.partial1;
                 adjoints[entry.input2_idx] += result_adjoint * entry.partial2;
                 break;
                 
-            case AADOpType::DIV:
+            case static_cast<int>(AADOpType::DIV):
                 adjoints[entry.input1_idx] += result_adjoint * entry.partial1;
                 adjoints[entry.input2_idx] += result_adjoint * entry.partial2;
                 break;
                 
-            case AADOpType::LOG:
+            case static_cast<int>(AADOpType::LOG):
                 adjoints[entry.input1_idx] += result_adjoint * entry.partial1;
                 break;
                 
-            case AADOpType::EXP:
+            case static_cast<int>(AADOpType::EXP):
                 adjoints[entry.input1_idx] += result_adjoint * entry.partial1;
                 break;
                 
-            case AADOpType::SQRT:
+            case static_cast<int>(AADOpType::SQRT):
                 adjoints[entry.input1_idx] += result_adjoint * entry.partial1;
                 break;
                 
-            case AADOpType::NORM_CDF:
+            case static_cast<int>(AADOpType::NORM_CDF):
                 adjoints[entry.input1_idx] += result_adjoint * entry.partial1;
                 break;
                 
-            case AADOpType::NEG:
+            case static_cast<int>(AADOpType::NEG):
                 adjoints[entry.input1_idx] += result_adjoint * entry.partial1;
                 break;
                 
