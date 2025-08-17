@@ -23,14 +23,26 @@ set(CUDA_SOURCES
     cuda_kernels.cu
 )
 
-# Create executable
+# Test source files
+set(TEST_SOURCES
+    test_gpu_aad.cpp
+    GPUAADTape.cpp
+    GPUAADNumber.cpp
+)
+
+# Create main executable
 add_executable(${PROJECT_NAME} ${SOURCES} ${CUDA_SOURCES})
+
+# Create test executable
+add_executable(test_gpu_aad ${TEST_SOURCES} ${CUDA_SOURCES})
 
 # Set properties for CUDA files
 set_property(TARGET ${PROJECT_NAME} PROPERTY CUDA_RUNTIME_LIBRARY Shared)
+set_property(TARGET test_gpu_aad PROPERTY CUDA_RUNTIME_LIBRARY Shared)
 
 # Link CUDA libraries
 target_link_libraries(${PROJECT_NAME} CUDA::cudart)
+target_link_libraries(test_gpu_aad CUDA::cudart)
 
 # Compiler flags
 target_compile_options(${PROJECT_NAME} PRIVATE 
@@ -38,5 +50,11 @@ target_compile_options(${PROJECT_NAME} PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-O3>
 )
 
+target_compile_options(test_gpu_aad PRIVATE 
+    $<$<COMPILE_LANGUAGE:CUDA>:-O3 --use_fast_math>
+    $<$<COMPILE_LANGUAGE:CXX>:-O3>
+)
+
 # Include directories
 target_include_directories(${PROJECT_NAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_include_directories(test_gpu_aad PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
