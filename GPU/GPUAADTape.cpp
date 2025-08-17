@@ -320,37 +320,35 @@ bool GPUAADTape::allocate_gpu_memory() {
     
     auto start_time = std::chrono::high_resolution_clock::now();
     
-    // Allocate using memory pool for better management
+    // Use direct CUDA allocation instead of memory pool for now
     size_t values_size = max_vars_ * sizeof(double);
     size_t adjoints_size = max_vars_ * sizeof(double);
     size_t tape_size = max_tape_size_ * sizeof(GPUTapeEntry);
     
-    d_values_ = static_cast<double*>(memory_pool_->allocate(values_size));
-    if (!d_values_) {
-        GPUErrorHandler::handle_memory_error(cudaErrorMemoryAllocation);
+    // Direct CUDA allocation
+    cudaError_t error = cudaMalloc(&d_values_, values_size);
+    if (!GPUErrorHandler::check_cuda_error(error, "cudaMalloc values")) {
         return handle_allocation_failure();
     }
     
-    d_adjoints_ = static_cast<double*>(memory_pool_->allocate(adjoints_size));
-    if (!d_adjoints_) {
-        memory_pool_->deallocate(d_values_);
+    error = cudaMalloc(&d_adjoints_, adjoints_size);
+    if (!GPUErrorHandler::check_cuda_error(error, "cudaMalloc adjoints")) {
+        cudaFree(d_values_);
         d_values_ = nullptr;
-        GPUErrorHandler::handle_memory_error(cudaErrorMemoryAllocation);
         return handle_allocation_failure();
     }
     
-    d_tape_ = static_cast<GPUTapeEntry*>(memory_pool_->allocate(tape_size));
-    if (!d_tape_) {
-        memory_pool_->deallocate(d_values_);
-        memory_pool_->deallocate(d_adjoints_);
+    error = cudaMalloc(&d_tape_, tape_size);
+    if (!GPUErrorHandler::check_cuda_error(error, "cudaMalloc tape")) {
+        cudaFree(d_values_);
+        cudaFree(d_adjoints_);
         d_values_ = nullptr;
         d_adjoints_ = nullptr;
-        GPUErrorHandler::handle_memory_error(cudaErrorMemoryAllocation);
         return handle_allocation_failure();
     }
     
     // Initialize memory to zero
-    cudaError_t error = cudaMemset(d_values_, 0, values_size);
+    error = cudaMemset(d_values_, 0, values_size);
     if (!GPUErrorHandler::check_cuda_error(error, "cudaMemset values")) {
         free_gpu_memory();
         return false;
@@ -381,17 +379,17 @@ void GPUAADTape::free_gpu_memory() {
     if (!gpu_allocated_) return;
     
     if (d_values_) {
-        memory_pool_->deallocate(d_values_);
+        cudaFree(d_values_);
         d_values_ = nullptr;
     }
     
     if (d_adjoints_) {
-        memory_pool_->deallocate(d_adjoints_);
+        cudaFree(d_adjoints_);
         d_adjoints_ = nullptr;
     }
     
     if (d_tape_) {
-        memory_pool_->deallocate(d_tape_);
+        cudaFree(d_tape_);
         d_tape_ = nullptr;
     }
     
