@@ -1,6 +1,14 @@
 // ===== AADTypes.h =====
 #pragma once
 
+#include <cstddef>  // For size_t
+
+#ifdef __CUDACC__
+    #define CUDA_CALLABLE __host__ __device__
+#else
+    #define CUDA_CALLABLE
+#endif
+
 enum class AADOpType {
     ADD = 0,
     SUB = 1,
@@ -31,12 +39,12 @@ struct GPUTapeEntry {
     double partial2;
     
     // Constructor for easier initialization
-    __host__ __device__ GPUTapeEntry() 
+    CUDA_CALLABLE GPUTapeEntry() 
         : result_idx(-1), op_type(0), input1_idx(-1), input2_idx(-1), 
           constant(0.0), partial1(0.0), partial2(0.0) {}
     
-    __host__ __device__ GPUTapeEntry(int res_idx, AADOpType op, int in1_idx, int in2_idx, 
-                                    double const_val, double p1, double p2)
+    CUDA_CALLABLE GPUTapeEntry(int res_idx, AADOpType op, int in1_idx, int in2_idx, 
+                               double const_val, double p1, double p2)
         : result_idx(res_idx), op_type(static_cast<int>(op)), input1_idx(in1_idx), 
           input2_idx(in2_idx), constant(const_val), partial1(p1), partial2(p2) {}
 };

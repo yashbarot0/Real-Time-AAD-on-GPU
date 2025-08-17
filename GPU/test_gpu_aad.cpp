@@ -84,8 +84,7 @@ int main() {
         
         // Set up for derivative computation
         tape.clear_adjoints();
-        z2.adj() = 1.0; // Set adjoint of result
-        tape.set_adjoint(z2.index(), 1.0);
+        tape.set_adjoint(z2.index(), 1.0); // Set adjoint of result
         
         // Test GPU propagation
         if (tape.propagate_gpu()) {
