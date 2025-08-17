@@ -9,6 +9,135 @@
 #include <cmath>
 #include <cstdio>
 
+// Local, non-atomic recorders for per-thread AAD tape building
+__device__ inline int record_constant_local(double value, double* values, int* next_var_idx) {
+    int idx = (*next_var_idx)++;
+    values[idx] = value;
+    return idx;
+}
+
+__device__ inline int record_unary_op_local(
+    AADOpType op_type, int input_idx, double result_val, double partial,
+    GPUTapeEntry* tape, double* values, int* tape_pos, int* next_var_idx,
+    int max_tape_size)
+{
+    int result_idx = (*next_var_idx)++;
+    values[result_idx] = result_val;
+    int t = (*tape_pos)++;
+    if (t < max_tape_size) {
+        tape[t] = GPUTapeEntry(result_idx, op_type, input_idx, -1, 0.0, partial, 0.0);
+    }
+    return result_idx;
+}
+
+__device__ inline int record_binary_op_local(
+    AADOpType op_type, int input1_idx, int input2_idx,
+    double result_val, double partial1, double partial2,
+    GPUTapeEntry* tape, double* values, int* tape_pos, int* next_var_idx,
+    int max_tape_size)
+{
+    int result_idx = (*next_var_idx)++;
+    values[result_idx] = result_val;
+    int t = (*tape_pos)++;
+    if (t < max_tape_size) {
+        tape[t] = GPUTapeEntry(result_idx, op_type, input1_idx, input2_idx, 0.0, partial1, partial2);
+    }
+    return result_idx;
+}
+
+// AAD ops (local)
+__device__ inline int aad_add_local(int a_idx, int b_idx, double* values,
+    GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
+{
+    double a = values[a_idx], b = values[b_idx];
+    return record_binary_op_local(AADOpType::ADD, a_idx, b_idx, a + b, 1.0, 1.0,
+        tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_sub_local(int a_idx, int b_idx, double* values,
+    GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
+{
+    double a = values[a_idx], b = values[bIdx];
+    return record_binary_op_local(AADOpType::SUB, a_idx, b_idx, a - b, 1.0, -1.0,
+        tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_mul_local(int a_idx, int b_idx, double* values,
+    GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
+{
+    double a = values[a_idx], b = values[bIdx];
+    return record_binary_op_local(AADOpType::MUL, a_idx, b_idx, a * b, b, a,
+        tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_div_local(int a_idx, int b_idx, double* values,
+    GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
+{
+    double a = values[a_idx], b = values[bIdx];
+    double res = safe_divide(a, b);
+    double p1 = safe_divide(1.0, b);
+    double p2 = safe_divide(-a, b * b);
+    return record_binary_op_local(AADOpType::DIV, a_idx, b_idx, res, p1, p2,
+        tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_log_local(int x_idx, double* values,
+    GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
+{
+    double x = values[x_idx];
+    double res = safe_log(x);
+    double p = (x > 1e-15) ? 1.0 / x : 1.0 / 1e-15;
+    return record_unary_op_local(AADOpType::LOG, x_idx, res, p,
+        tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_exp_local(int x_idx, double* values,
+    GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
+{
+    double x = values[x_idx];
+    double res = safe_exp(x);
+    return record_unary_op_local(AADOpType::EXP, x_idx, res, res,
+        tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_sqrt_local(int x_idx, double* values,
+    GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
+{
+    double x = values[x_idx];
+    double res = safe_sqrt(x);
+    double p = (res > 1e-15) ? 0.5 / res : 0.0;
+    return record_unary_op_local(AADOpType::SQRT, x_idx, res, p,
+        tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_norm_cdf_local(int x_idx, double* values,
+    GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
+{
+    double x = values[x_idx];
+    double res = device_norm_cdf(x);
+    double p = device_norm_pdf(x);
+    return record_unary_op_local(AADOpType::NORM_CDF, x_idx, res, p,
+        tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_mul_const_local(int x_idx, double c, double* values,
+    GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
+{
+    double x = values[x_idx];
+    double res = x * c;
+    return record_unary_op_local(AADOpType::MUL, x_idx, res, c,
+        tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_neg_local(int x_idx, double* values,
+    GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
+{
+    double x = values[x_idx];
+    double res = -x;
+    return record_unary_op_local(AADOpType::NEG, x_idx, res, -1.0,
+        tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
 // Main forward pass kernel - implements step-by-step Black-Scholes with AAD
 __global__ void batch_blackscholes_forward_kernel(
     const BatchInputs* inputs,
@@ -70,58 +199,36 @@ __global__ void batch_blackscholes_forward_kernel(
         return;
     }
     
-    // Record input variables in AAD tape
-    int S_idx = record_constant(S_val, local_values, &local_var_idx);
-    int K_idx = record_constant(K_val, local_values, &local_var_idx);
-    int T_idx = record_constant(T_val, local_values, &local_var_idx);
-    int r_idx = record_constant(r_val, local_values, &local_var_idx);
-    int sigma_idx = record_constant(sigma_val, local_values, &local_var_idx);
+    // Record input variables in AAD tape (local recorders)
+    int S_idx    = record_constant_local(S_val, local_values, &local_var_idx);
+    int K_idx    = record_constant_local(K_val, local_values, &local_var_idx);
+    int T_idx    = record_constant_local(T_val, local_values, &local_var_idx);
+    int r_idx    = record_constant_local(r_val, local_values, &local_var_idx);
+    int sigma_idx= record_constant_local(sigma_val, local_values, &local_var_idx);
     
-    // Step-by-step Black-Scholes construction using AAD
-    // Step 1: Calculate sigma * sqrt(T)
-    int T_sqrt_idx = aad_sqrt(T_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    int sigma_sqrt_T_idx = aad_mul(sigma_idx, T_sqrt_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    // Step-by-step Black-Scholes construction using AAD (local ops)
+    int T_sqrt_idx          = aad_sqrt_local(T_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int sigma_sqrt_T_idx    = aad_mul_local(sigma_idx, T_sqrt_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int S_over_K_idx        = aad_div_local(S_idx, K_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int ln_S_over_K_idx     = aad_log_local(S_over_K_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int sigma_squared_idx   = aad_mul_local(sigma_idx, sigma_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int half_sigma2_idx     = aad_mul_const_local(sigma_squared_idx, 0.5, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int r_plus_half_sigma2  = aad_add_local(r_idx, half_sigma2_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int drift_term_idx      = aad_mul_local(r_plus_half_sigma2, T_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int d1_num_idx          = aad_add_local(ln_S_over_K_idx, drift_term_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int d1_idx              = aad_div_local(d1_num_idx, sigma_sqrt_T_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int d2_idx              = aad_sub_local(d1_idx, sigma_sqrt_T_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int N_d1_idx            = aad_norm_cdf_local(d1_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int N_d2_idx            = aad_norm_cdf_local(d2_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int neg_r_idx           = aad_neg_local(r_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int neg_rT_idx          = aad_mul_local(neg_r_idx, T_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int discount_idx        = aad_exp_local(neg_rT_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int S_Nd1_idx           = aad_mul_local(S_idx, N_d1_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int K_disc_idx          = aad_mul_local(K_idx, discount_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int K_disc_Nd2_idx      = aad_mul_local(K_disc_idx, N_d2_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
+    int call_price_idx      = aad_sub_local(S_Nd1_idx, K_disc_Nd2_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
     
-    // Step 2: Calculate ln(S/K)
-    int S_over_K_idx = aad_div(S_idx, K_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    int ln_S_over_K_idx = aad_log(S_over_K_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    
-    // Step 3: Calculate (r + 0.5*sigma^2)*T
-    int sigma_squared_idx = aad_mul(sigma_idx, sigma_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    int half_sigma_squared_idx = aad_mul_const(sigma_squared_idx, 0.5, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    int r_plus_half_sigma2_idx = aad_add(r_idx, half_sigma_squared_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    int drift_term_idx = aad_mul(r_plus_half_sigma2_idx, T_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    
-    // Step 4: Calculate d1 = [ln(S/K) + (r + 0.5*sigma^2)*T] / (sigma*sqrt(T))
-    int d1_numerator_idx = aad_add(ln_S_over_K_idx, drift_term_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    int d1_idx = aad_div(d1_numerator_idx, sigma_sqrt_T_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    
-    // Step 5: Calculate d2 = d1 - sigma*sqrt(T)
-    int d2_idx = aad_sub(d1_idx, sigma_sqrt_T_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    
-    // Step 6: Calculate N(d1) and N(d2)
-    int N_d1_idx = aad_norm_cdf(d1_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    int N_d2_idx = aad_norm_cdf(d2_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    
-    // Step 7: Calculate exp(-r*T)
-    int neg_r_idx = aad_neg(r_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    int neg_rT_idx = aad_mul(neg_r_idx, T_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    int discount_idx = aad_exp(neg_rT_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    
-    // Step 8: Calculate S*N(d1)
-    int S_N_d1_idx = aad_mul(S_idx, N_d1_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    
-    // Step 9: Calculate K*exp(-r*T)*N(d2)
-    int K_discount_idx = aad_mul(K_idx, discount_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    int K_discount_N_d2_idx = aad_mul(K_discount_idx, N_d2_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    
-    // Step 10: Calculate final call price = S*N(d1) - K*exp(-r*T)*N(d2)
-    int call_price_idx = aad_sub(S_N_d1_idx, K_discount_N_d2_idx, local_values, local_tape, &local_tape_pos, &local_var_idx, max_tape_size_per_scenario);
-    
-    // Store the forward pass result
     outputs->option_prices[scenario_id] = local_values[call_price_idx];
-    
-    // Store tape position for reverse pass
     tape_positions[scenario_id] = local_tape_pos;
     
     // Initialize Greeks to zero (will be computed by reverse pass)
