@@ -33,11 +33,10 @@ void launch_batch_blackscholes_forward_stable(
 
 // Reverse pass kernel functions
 void launch_batch_aad_reverse(
-    const GPUTapeEntry* d_tape,
+    const BatchInputs* d_inputs,
+    GPUTapeEntry* d_tape,
     double* d_values,
-    double* d_adjoints,
-    const int* d_tape_positions,
-    const int* d_variable_indices,
+    int* d_tape_positions,
     BatchOutputs* d_outputs,
     int num_scenarios,
     int max_tape_size_per_scenario,
