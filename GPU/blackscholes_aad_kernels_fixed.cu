@@ -49,7 +49,7 @@ __device__ inline int record_binary_op_local(
 __device__ inline int aad_add_local(int a_idx, int b_idx, double* values,
     GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
 {
-    double a = values[a_idx], b = values[b_idx];
+    double a = values[a_idx], b = values[bIdx];
     return record_binary_op_local(AADOpType::ADD, a_idx, b_idx, a + b, 1.0, 1.0,
         tape, values, tape_pos, next_var_idx, max_tape_size);
 }
