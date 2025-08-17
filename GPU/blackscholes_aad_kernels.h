@@ -36,7 +36,7 @@ void launch_batch_aad_reverse(
     const GPUTapeEntry* d_tape,
     double* d_values,
     double* d_adjoints,
-    const int* d_tape_sizes,
+    const int* d_tape_positions,
     const int* d_variable_indices,
     BatchOutputs* d_outputs,
     int num_scenarios,
