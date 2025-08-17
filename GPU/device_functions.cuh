@@ -3,10 +3,146 @@
 #include <cuda_runtime.h>
 #include <device_launch_parameters.h>
 #include <cmath>
+#include "AADTypes.h"
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
+
+// AAD tape recording functions
+__device__ inline int record_constant(double value, double* values, int* next_var_idx) {
+    int idx = atomicAdd(next_var_idx, 1);
+    values[idx] = value;
+    return idx;
+}
+
+__device__ inline int record_unary_op(
+    AADOpType op_type, int input_idx, double result_val, double partial,
+    GPUTapeEntry* tape, double* values, int* tape_pos, int* next_var_idx,
+    int max_tape_size) {
+    
+    // Get next variable index
+    int result_idx = atomicAdd(next_var_idx, 1);
+    values[result_idx] = result_val;
+    
+    // Record tape entry
+    int tape_idx = atomicAdd(tape_pos, 1);
+    if (tape_idx < max_tape_size) {
+        tape[tape_idx] = GPUTapeEntry(result_idx, op_type, input_idx, -1, 0.0, partial, 0.0);
+    }
+    
+    return result_idx;
+}
+
+__device__ inline int record_binary_op(
+    AADOpType op_type, int input1_idx, int input2_idx, 
+    double result_val, double partial1, double partial2,
+    GPUTapeEntry* tape, double* values, int* tape_pos, int* next_var_idx,
+    int max_tape_size) {
+    
+    // Get next variable index
+    int result_idx = atomicAdd(next_var_idx, 1);
+    values[result_idx] = result_val;
+    
+    // Record tape entry
+    int tape_idx = atomicAdd(tape_pos, 1);
+    if (tape_idx < max_tape_size) {
+        tape[tape_idx] = GPUTapeEntry(result_idx, op_type, input1_idx, input2_idx, 
+                                     0.0, partial1, partial2);
+    }
+    
+    return result_idx;
+}
+
+// AAD arithmetic operations
+__device__ inline int aad_add(int a_idx, int b_idx, double* values,
+                             GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size) {
+    double a_val = values[a_idx];
+    double b_val = values[b_idx];
+    double result = a_val + b_val;
+    return record_binary_op(AADOpType::ADD, a_idx, b_idx, result, 1.0, 1.0,
+                           tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_sub(int a_idx, int b_idx, double* values,
+                             GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size) {
+    double a_val = values[a_idx];
+    double b_val = values[b_idx];
+    double result = a_val - b_val;
+    return record_binary_op(AADOpType::SUB, a_idx, b_idx, result, 1.0, -1.0,
+                           tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_mul(int a_idx, int b_idx, double* values,
+                             GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size) {
+    double a_val = values[a_idx];
+    double b_val = values[b_idx];
+    double result = a_val * b_val;
+    return record_binary_op(AADOpType::MUL, a_idx, b_idx, result, b_val, a_val,
+                           tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_div(int a_idx, int b_idx, double* values,
+                             GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size) {
+    double a_val = values[a_idx];
+    double b_val = values[b_idx];
+    double result = safe_divide(a_val, b_val);
+    double partial1 = safe_divide(1.0, b_val);
+    double partial2 = safe_divide(-a_val, b_val * b_val);
+    return record_binary_op(AADOpType::DIV, a_idx, b_idx, result, partial1, partial2,
+                           tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_log(int x_idx, double* values,
+                             GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size) {
+    double x_val = values[x_idx];
+    double result = safe_log(x_val);
+    double partial = (x_val > 1e-15) ? 1.0 / x_val : 1.0 / 1e-15;
+    return record_unary_op(AADOpType::LOG, x_idx, result, partial,
+                          tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_exp(int x_idx, double* values,
+                             GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size) {
+    double x_val = values[x_idx];
+    double result = safe_exp(x_val);
+    return record_unary_op(AADOpType::EXP, x_idx, result, result,
+                          tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_sqrt(int x_idx, double* values,
+                              GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size) {
+    double x_val = values[x_idx];
+    double result = safe_sqrt(x_val);
+    double partial = (result > 1e-15) ? 0.5 / result : 0.0;
+    return record_unary_op(AADOpType::SQRT, x_idx, result, partial,
+                          tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_norm_cdf(int x_idx, double* values,
+                                  GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size) {
+    double x_val = values[x_idx];
+    double result = device_norm_cdf(x_val);
+    double partial = device_norm_pdf(x_val); // Derivative of CDF is PDF
+    return record_unary_op(AADOpType::NORM_CDF, x_idx, result, partial,
+                          tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_mul_const(int x_idx, double constant, double* values,
+                                   GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size) {
+    double x_val = values[x_idx];
+    double result = x_val * constant;
+    return record_unary_op(AADOpType::MUL, x_idx, result, constant,
+                          tape, values, tape_pos, next_var_idx, max_tape_size);
+}
+
+__device__ inline int aad_neg(int x_idx, double* values,
+                             GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size) {
+    double x_val = values[x_idx];
+    double result = -x_val;
+    return record_unary_op(AADOpType::NEG, x_idx, result, -1.0,
+                          tape, values, tape_pos, next_var_idx, max_tape_size);
+}
 
 // Safe mathematical operations for numerical stability
 __device__ inline double safe_log(double x) {

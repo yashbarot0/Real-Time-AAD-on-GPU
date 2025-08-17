@@ -7,24 +7,6 @@
 #include <cmath>
 #include <cstdio>  // For printf
 
-// Forward declarations for AAD recording functions from blackscholes_aad_kernels_fixed.cu
-__device__ int record_constant(double value, double* values, int* next_var_idx);
-__device__ int record_unary_op(AADOpType op_type, int input_idx, double result_val, double partial,
-                               GPUTapeEntry* tape, double* values, int* tape_pos, int* next_var_idx, int max_tape_size);
-__device__ int record_binary_op(AADOpType op_type, int input1_idx, int input2_idx, double result_val, 
-                                double partial1, double partial2, GPUTapeEntry* tape, double* values, 
-                                int* tape_pos, int* next_var_idx, int max_tape_size);
-__device__ int aad_add(int a_idx, int b_idx, double* values, GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size);
-__device__ int aad_sub(int a_idx, int b_idx, double* values, GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size);
-__device__ int aad_mul(int a_idx, int b_idx, double* values, GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size);
-__device__ int aad_div(int a_idx, int b_idx, double* values, GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size);
-__device__ int aad_log(int x_idx, double* values, GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size);
-__device__ int aad_exp(int x_idx, double* values, GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size);
-__device__ int aad_sqrt(int x_idx, double* values, GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size);
-__device__ int aad_norm_cdf(int x_idx, double* values, GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size);
-__device__ int aad_mul_const(int x_idx, double constant, double* values, GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size);
-__device__ int aad_neg(int x_idx, double* values, GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size);
-
 // Enhanced propagate kernel with better operation handling
 __global__ void propagate_kernel(
     const GPUTapeEntry* tape,
@@ -120,7 +102,6 @@ __global__ void batch_aad_reverse_kernel(
     // Assuming variable order: S(0), K(1), T(2), r(3), sigma(4)
     if (variable_indices) {
         int S_idx = variable_indices[scenario_id * 5 + 0];
-        int K_idx = variable_indices[scenario_id * 5 + 1];
         int T_idx = variable_indices[scenario_id * 5 + 2];
         int r_idx = variable_indices[scenario_id * 5 + 3];
         int sigma_idx = variable_indices[scenario_id * 5 + 4];
