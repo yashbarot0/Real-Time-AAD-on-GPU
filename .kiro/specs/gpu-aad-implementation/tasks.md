@@ -29,7 +29,7 @@
   - Ensure all functions properly record AAD dependencies
   - _Requirements: 2.4, 6.4_
 
-- [x] 2. Create GPU Black-Scholes kernel with AAD
+- [ ] 2. Create GPU Black-Scholes kernel with AAD
   - Implement batch Black-Scholes kernel using proven CPU method
   - Add parallel AAD tape recording within kernel
   - Optimize memory access patterns for coalesced reads/writes
