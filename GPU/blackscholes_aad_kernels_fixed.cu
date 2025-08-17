@@ -49,7 +49,7 @@ __device__ inline int record_binary_op_local(
 __device__ inline int aad_add_local(int a_idx, int b_idx, double* values,
     GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
 {
-    double a = values[a_idx], b = values[bIdx];
+    double a = values[a_idx], b = values[b_idx];
     return record_binary_op_local(AADOpType::ADD, a_idx, b_idx, a + b, 1.0, 1.0,
         tape, values, tape_pos, next_var_idx, max_tape_size);
 }
@@ -57,7 +57,7 @@ __device__ inline int aad_add_local(int a_idx, int b_idx, double* values,
 __device__ inline int aad_sub_local(int a_idx, int b_idx, double* values,
     GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
 {
-    double a = values[a_idx], b = values[bIdx];
+    double a = values[a_idx], b = values[b_idx];
     return record_binary_op_local(AADOpType::SUB, a_idx, b_idx, a - b, 1.0, -1.0,
         tape, values, tape_pos, next_var_idx, max_tape_size);
 }
@@ -65,7 +65,7 @@ __device__ inline int aad_sub_local(int a_idx, int b_idx, double* values,
 __device__ inline int aad_mul_local(int a_idx, int b_idx, double* values,
     GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
 {
-    double a = values[a_idx], b = values[bIdx];
+    double a = values[a_idx], b = values[b_idx];
     return record_binary_op_local(AADOpType::MUL, a_idx, b_idx, a * b, b, a,
         tape, values, tape_pos, next_var_idx, max_tape_size);
 }
@@ -73,7 +73,7 @@ __device__ inline int aad_mul_local(int a_idx, int b_idx, double* values,
 __device__ inline int aad_div_local(int a_idx, int b_idx, double* values,
     GPUTapeEntry* tape, int* tape_pos, int* next_var_idx, int max_tape_size)
 {
-    double a = values[a_idx], b = values[bIdx];
+    double a = values[a_idx], b = values[b_idx];
     double res = safe_divide(a, b);
     double p1 = safe_divide(1.0, b);
     double p2 = safe_divide(-a, b * b);
