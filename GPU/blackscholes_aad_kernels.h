@@ -62,6 +62,16 @@ void launch_batch_aad_reverse_optimized(
     int max_tape_size_per_scenario,
     int max_vars_per_scenario);
 
+void launch_bs_aad_reverse_fixed(
+    const BatchInputs* d_inputs,
+    GPUTapeEntry* d_tape,
+    double* d_values,
+    int* d_tape_positions,
+    BatchOutputs* d_outputs,
+    int num_scenarios,
+    int max_tape_size_per_scenario,
+    int max_vars_per_scenario);
+
 // Numerical stability functions (device functions, included for completeness)
 // These are defined in numerical_stability.cu and used internally by kernels
 

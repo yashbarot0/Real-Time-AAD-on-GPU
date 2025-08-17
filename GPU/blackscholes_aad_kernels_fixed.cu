@@ -158,9 +158,8 @@ __global__ void batch_aad_reverse_kernel(
     GPUTapeEntry* local_tape = &tape[tape_offset];
     double* local_values = &values[var_offset];
     
-    // Allocate adjoint array (local to this thread)
-    extern __shared__ double shared_adjoints[];
-    double* adjoints = &shared_adjoints[threadIdx.x * max_vars_per_scenario];
+    // Use per-scenario values buffer as adjoint storage during reverse pass
+    double* adjoints = local_values;
     
     // Initialize adjoints to zero
     for (int i = 0; i < max_vars_per_scenario; i++) {
@@ -339,6 +338,34 @@ extern "C" {
         if (error != cudaSuccess) {
             printf("Kernel launch error in batch_blackscholes_forward_stable: %s\n", 
                    cudaGetErrorString(error));
+        }
+        
+        cudaDeviceSynchronize();
+    }
+
+    // New: uniquely named reverse pass launcher for the fixed AAD kernels
+    void launch_bs_aad_reverse_fixed(
+        const BatchInputs* d_inputs,
+        GPUTapeEntry* d_tape,
+        double* d_values,
+        int* d_tape_positions,
+        BatchOutputs* d_outputs,
+        int num_scenarios,
+        int max_tape_size_per_scenario,
+        int max_vars_per_scenario)
+    {
+        if (num_scenarios <= 0) return;
+        
+        int block_size = 256;
+        int grid_size = (num_scenarios + block_size - 1) / block_size;
+        
+        batch_aad_reverse_kernel<<<grid_size, block_size>>>(
+            d_inputs, d_tape, d_values, d_tape_positions, d_outputs,
+            num_scenarios, max_tape_size_per_scenario, max_vars_per_scenario);
+        
+        cudaError_t error = cudaGetLastError();
+        if (error != cudaSuccess) {
+            printf("Kernel launch error in launch_bs_aad_reverse_fixed: %s\n", cudaGetErrorString(error));
         }
         
         cudaDeviceSynchronize();
