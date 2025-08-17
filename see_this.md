@@ -1,5 +1,8 @@
- g++ -std=c++17 -O3 final_realtime_aad_demo.cpp -o final_demo
+command to compile the code....:- g++ -std=c++17 -O3 final_realtime_aad_demo.cpp -o final_demo
+
+// execution of code.... 
 ❯ ./final_demo
+
 ========================================================================================================================
 🎯 REAL-TIME AAD ON CPU - FINAL DEMONSTRATION 🎯
 ========================================================================================================================
