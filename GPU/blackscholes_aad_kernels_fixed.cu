@@ -343,35 +343,4 @@ extern "C" {
         
         cudaDeviceSynchronize();
     }
-    
-    void launch_batch_aad_reverse(
-        const BatchInputs* d_inputs,
-        GPUTapeEntry* d_tape,
-        double* d_values,
-        int* d_tape_positions,
-        BatchOutputs* d_outputs,
-        int num_scenarios,
-        int max_tape_size_per_scenario,
-        int max_vars_per_scenario)
-    {
-        if (num_scenarios <= 0) return;
-        
-        int block_size = 256;
-        int grid_size = (num_scenarios + block_size - 1) / block_size;
-        
-        // Calculate shared memory size for adjoints
-        size_t shared_mem_size = block_size * max_vars_per_scenario * sizeof(double);
-        
-        batch_aad_reverse_kernel<<<grid_size, block_size, shared_mem_size>>>(
-            d_inputs, d_tape, d_values, d_tape_positions, d_outputs,
-            num_scenarios, max_tape_size_per_scenario, max_vars_per_scenario);
-        
-        cudaError_t error = cudaGetLastError();
-        if (error != cudaSuccess) {
-            printf("Kernel launch error in batch_aad_reverse: %s\n", 
-                   cudaGetErrorString(error));
-        }
-        
-        cudaDeviceSynchronize();
-    }
 }

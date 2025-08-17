@@ -137,11 +137,16 @@ int main() {
     
     std::cout << "Running GPU Black-Scholes forward pass..." << std::endl;
     
-    // Launch the kernel
+    // Launch the AAD forward pass kernel
     auto start = std::chrono::high_resolution_clock::now();
     
-    launch_batch_blackscholes_forward_stable(
-        d_inputs, d_tape, d_values, d_tape_positions, d_outputs, d_error_flags,
+    launch_batch_blackscholes_forward(
+        d_inputs, d_tape, d_values, d_tape_positions, d_outputs,
+        num_scenarios, max_tape_size_per_scenario, max_vars_per_scenario);
+    
+    // Launch the AAD reverse pass kernel to compute Greeks
+    launch_batch_aad_reverse(
+        d_inputs, d_tape, d_values, d_tape_positions, d_outputs,
         num_scenarios, max_tape_size_per_scenario, max_vars_per_scenario);
     
     auto end = std::chrono::high_resolution_clock::now();
