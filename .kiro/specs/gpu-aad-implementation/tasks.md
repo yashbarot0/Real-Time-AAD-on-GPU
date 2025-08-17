@@ -29,28 +29,28 @@
   - Ensure all functions properly record AAD dependencies
   - _Requirements: 2.4, 6.4_
 
-- [ ] 2. Create GPU Black-Scholes kernel with AAD
+- [x] 2. Create GPU Black-Scholes kernel with AAD
   - Implement batch Black-Scholes kernel using proven CPU method
   - Add parallel AAD tape recording within kernel
   - Optimize memory access patterns for coalesced reads/writes
   - Implement cooperative reverse pass for gradient computation
   - _Requirements: 2.1, 2.2, 2.3, 3.2_
 
-- [ ] 2.1 Implement forward pass kernel
+- [x] 2.1 Implement forward pass kernel
   - Create batch_blackscholes_forward_kernel function
   - Use step-by-step Black-Scholes construction from CPU implementation
   - Implement thread-local tape recording with atomic operations
   - Add shared memory optimization for intermediate values
   - _Requirements: 2.1, 2.3, 3.2_
 
-- [ ] 2.2 Implement reverse pass kernel
+- [x] 2.2 Implement reverse pass kernel
   - Create batch_aad_reverse_kernel for gradient computation
   - Implement parallel tape traversal in reverse order
   - Use atomic operations for adjoint accumulation
   - Optimize for memory bandwidth and occupancy
   - _Requirements: 1.3, 2.2, 3.2_
 
-- [ ] 2.3 Add numerical stability and edge case handling
+- [x] 2.3 Add numerical stability and edge case handling
   - Implement safe mathematical operations (safe_log, safe_sqrt, etc.)
   - Handle edge cases: zero volatility, negative time, extreme strikes
   - Add bounds checking for all array accesses
