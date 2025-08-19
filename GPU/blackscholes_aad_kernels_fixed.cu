@@ -140,11 +140,11 @@ __device__ inline int aad_neg_local(int x_idx, double* values,
 
 // Main forward pass kernel - implements step-by-step Black-Scholes with AAD
 __global__ void batch_blackscholes_forward_kernel(
-    const BatchInputs* inputs,
-    GPUTapeEntry* tape,
-    double* values,
-    int* tape_positions,
-    BatchOutputs* outputs,
+    const BatchInputs* __restrict__ inputs,
+    GPUTapeEntry* __restrict__ tape,
+    double* __restrict__ values,
+    int* __restrict__ tape_positions,
+    BatchOutputs* __restrict__ outputs,
     int num_scenarios,
     int max_tape_size_per_scenario,
     int max_vars_per_scenario)
@@ -241,11 +241,11 @@ __global__ void batch_blackscholes_forward_kernel(
 
 // Reverse pass kernel for computing Greeks via AAD
 __global__ void batch_aad_reverse_kernel(
-    const BatchInputs* inputs,
-    GPUTapeEntry* tape,
-    double* values,
-    int* tape_positions,
-    BatchOutputs* outputs,
+    const BatchInputs* __restrict__ inputs,
+    GPUTapeEntry* __restrict__ tape,
+    double* __restrict__ values,
+    int* __restrict__ tape_positions,
+    BatchOutputs* __restrict__ outputs,
     int num_scenarios,
     int max_tape_size_per_scenario,
     int max_vars_per_scenario)
@@ -344,6 +344,73 @@ __global__ void batch_aad_reverse_kernel(
     
     // Gamma requires second-order derivatives (not implemented in first-order AAD)
     outputs->gammas[scenario_id] = 0.0;
+}
+
+// Cooperative reverse pass: one block per scenario, threads stride the tape in reverse
+__global__ void batch_aad_reverse_coop_kernel(
+    const GPUTapeEntry* __restrict__ tape,
+    double* __restrict__ values,
+    double* __restrict__ adjoints,
+    const int* __restrict__ tape_sizes,
+    BatchOutputs* __restrict__ outputs,
+    int num_scenarios,
+    int max_tape_size_per_scenario,
+    int max_vars_per_scenario)
+{
+    int scenario_id = blockIdx.x;
+    int tid = threadIdx.x;
+
+    if (scenario_id >= num_scenarios) return;
+
+    // Offsets
+    int tape_offset = scenario_id * max_tape_size_per_scenario;
+    int var_offset  = scenario_id * max_vars_per_scenario;
+
+    const GPUTapeEntry* local_tape = &tape[tape_offset];
+    double* local_adj = adjoints ? (adjoints + var_offset) : (values + var_offset);
+    int tape_size = tape_sizes[scenario_id];
+    if (tape_size <= 0) return;
+
+    // Clear adjoints cooperatively
+    for (int i = tid; i < max_vars_per_scenario; i += blockDim.x) {
+        local_adj[i] = 0.0;
+    }
+    __syncthreads();
+
+    // Seed output adjoint (price) to 1.0
+    if (tid == 0) {
+        int out_idx = local_tape[tape_size - 1].result_idx;
+        local_adj[out_idx] = 1.0;
+    }
+    __syncthreads();
+
+    // Strided reverse traversal with atomic accumulation
+    for (int i = tape_size - 1 - tid; i >= 0; i -= blockDim.x) {
+        const GPUTapeEntry& entry = local_tape[i];
+        double res_adj = local_adj[entry.result_idx];
+        if (res_adj == 0.0) continue;
+
+        if (entry.input1_idx >= 0) {
+            double c1 = res_adj * entry.partial1;
+            if (c1 != 0.0) atomicAdd(&local_adj[entry.input1_idx], c1);
+        }
+        if (entry.input2_idx >= 0) {
+            double c2 = res_adj * entry.partial2;
+            if (c2 != 0.0) atomicAdd(&local_adj[entry.input2_idx], c2);
+        }
+    }
+
+    __syncthreads();
+
+    // Write Greeks (single thread per block)
+    if (tid == 0) {
+        // Input order: S(0), K(1), T(2), r(3), sigma(4)
+        outputs->deltas[scenario_id] = local_adj[0];
+        outputs->rhos[scenario_id]   = local_adj[3];
+        outputs->vegas[scenario_id]  = local_adj[4];
+        outputs->thetas[scenario_id] = -local_adj[2];
+        outputs->gammas[scenario_id] = 0.0; // First-order AAD only
+    }
 }
 
 // Enhanced Black-Scholes kernel with comprehensive numerical stability
@@ -475,6 +542,34 @@ extern "C" {
             printf("Kernel launch error in launch_bs_aad_reverse_fixed: %s\n", cudaGetErrorString(error));
         }
         
+        cudaDeviceSynchronize();
+    }
+
+    // Cooperative reverse launcher (one block per scenario)
+    void launch_batch_aad_reverse_cooperative(
+        const GPUTapeEntry* d_tape,
+        double* d_values,
+        double* d_adjoints,
+        const int* d_tape_sizes,
+        BatchOutputs* d_outputs,
+        int num_scenarios,
+        int max_tape_size_per_scenario,
+        int max_vars_per_scenario)
+    {
+        if (num_scenarios <= 0) return;
+
+        int block_size = 128; // cooperative within scenario
+        int grid_size = num_scenarios;
+
+        batch_aad_reverse_coop_kernel<<<grid_size, block_size>>>(
+            d_tape, d_values, d_adjoints, d_tape_sizes, d_outputs,
+            num_scenarios, max_tape_size_per_scenario, max_vars_per_scenario);
+
+        cudaError_t error = cudaGetLastError();
+        if (error != cudaSuccess) {
+            printf("Kernel launch error in launch_batch_aad_reverse_cooperative: %s\n", cudaGetErrorString(error));
+        }
+
         cudaDeviceSynchronize();
     }
 }
