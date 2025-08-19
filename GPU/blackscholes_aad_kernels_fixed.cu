@@ -384,19 +384,19 @@ __global__ void batch_aad_reverse_coop_kernel(
     }
     __syncthreads();
 
-    // Strided reverse traversal with atomic accumulation
-    for (int i = tape_size - 1 - tid; i >= 0; i -= blockDim.x) {
-        const GPUTapeEntry& entry = local_tape[i];
-        double res_adj = local_adj[entry.result_idx];
-        if (res_adj == 0.0) continue;
+    // Reverse traversal performed by a single thread to avoid atomics
+    if (tid == 0) {
+        for (int i = tape_size - 1; i >= 0; i--) {
+            const GPUTapeEntry& entry = local_tape[i];
+            double res_adj = local_adj[entry.result_idx];
+            if (res_adj == 0.0) continue;
 
-        if (entry.input1_idx >= 0) {
-            double c1 = res_adj * entry.partial1;
-            if (c1 != 0.0) atomicAdd(&local_adj[entry.input1_idx], c1);
-        }
-        if (entry.input2_idx >= 0) {
-            double c2 = res_adj * entry.partial2;
-            if (c2 != 0.0) atomicAdd(&local_adj[entry.input2_idx], c2);
+            if (entry.input1_idx >= 0) {
+                local_adj[entry.input1_idx] += res_adj * entry.partial1;
+            }
+            if (entry.input2_idx >= 0) {
+                local_adj[entry.input2_idx] += res_adj * entry.partial2;
+            }
         }
     }
 

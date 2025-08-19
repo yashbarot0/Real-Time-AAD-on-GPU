@@ -144,9 +144,9 @@ int main() {
         d_inputs, d_tape, d_values, d_tape_positions, d_outputs,
         num_scenarios, max_tape_size_per_scenario, max_vars_per_scenario);
     
-    // Launch the cooperative reverse pass (one block per scenario)
-    launch_batch_aad_reverse_cooperative(
-        d_tape, d_values, /*d_adjoints=*/nullptr, d_tape_positions, d_outputs,
+    // Launch the validated reverse pass (per-thread scenario sweep)
+    launch_bs_aad_reverse_fixed(
+        d_inputs, d_tape, d_values, d_tape_positions, d_outputs,
         num_scenarios, max_tape_size_per_scenario, max_vars_per_scenario);
     
     auto end = std::chrono::high_resolution_clock::now();
